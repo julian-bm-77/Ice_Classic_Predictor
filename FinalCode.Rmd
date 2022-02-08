@@ -1,0 +1,283 @@
+---
+title: "Project Report"
+author: "Julian Benitez Mages, Aidan Johansson, Garrin Shieh, Michael Lembck"
+date: "12/13/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## DATA LOADING:
+
+```{r}
+winds <- read_csv("alaska_airports_hourly_winds_PANN.csv")
+
+winds$ts = as.Date(winds$ts, "%m/%d/%y %H:%M")
+
+winds$month <- month(as.POSIXlt(winds$ts, format="%m/%d/%y %H:%M"))
+winds$year <- year(as.POSIXlt(winds$ts, format="%m/%d/%y %H:%M"))
+
+winds <- winds %>% group_by(month, year) %>% summarize(ws_sum = sum(ws), wd_avg = mean(wd))
+
+nenanaData <- read_csv("DS5110-Proposal/NenanaIceClassic_1917-2021.csv")
+
+nenanaData <- nenanaData %>% rename("Decimal" = `Decimal Day of Year`)
+
+nenanaData
+
+fairbanksDailyOG <- read_csv("DS5110-Proposal/fairbanksdaily.csv")
+fairbanksDaily <- fairbanksDailyOG %>%
+  select(DATE, PRCP, SNOW, SNWD)
+fairbanksDaily <- fairbanksDaily %>%
+  separate(DATE, c("Year", "Month", "Day"), "-")
+Fairbanks_Info <- fairbanksDaily %>%
+  group_by(Year, Month) %>%
+  summarise(totalSnow = sum(SNOW), totalRain = sum(PRCP), avgSdepth = mean(SNWD))
+Fairbanks_Info <- Fairbanks_Info %>%
+  pivot_wider(names_from = Month, values_from = c(totalSnow, totalRain, avgSdepth))
+
+nenanaMonthlyOG<- read_csv("DS5110-Proposal/nenanamonthly.csv")
+nenanaMonthly <- nenanaMonthlyOG %>%
+  select(DATE, EMNT, EMXT, TAVG, TMAX, TMIN)
+nenanaMonthly <- nenanaMonthly %>%
+  separate(DATE, c("Year", "Month"), "-")
+nenanaMonthly <- nenanaMonthly %>%
+  pivot_wider(names_from = Month, values_from = c(EMNT, EMXT, TAVG, TMAX, TMIN))
+
+ourData <- merge(Fairbanks_Info, nenanaMonthly,by="Year", all = TRUE)
+ourData <- merge(ourData, nenanaData, by = "Year", all = TRUE)
+ourData
+```
+
+## Linear Regression:
+
+```{r}
+TAVG_04_model <- lm(`Decimal` ~ TAVG_04, ourData)
+summary(TAVG_04_model)
+
+ggplot(ourData, aes(x=TAVG_04, y=`Decimal`)) + 
+  geom_point() +
+  geom_smooth(method="lm") + 
+  labs()
+
+TAVG_10_model <- lm(`Decimal` ~ TAVG_10, ourData)
+summary(TAVG_10_model)
+
+ggplot(ourData, aes(x=TAVG_10, y=`Decimal`)) + 
+  geom_point() +
+  geom_smooth(method="lm") + 
+  labs()
+
+TMAX_04_model <- lm(`Decimal` ~ TMAX_04, ourData)
+summary(TMAX_04_model)
+
+ggplot(ourData, aes(x=TMAX_04, y=`Decimal`)) + 
+  geom_point() +
+  geom_smooth(method="lm") + 
+  labs()
+
+EMNT_07_model <- lm(`Decimal` ~ EMNT_07, ourData)
+summary(EMNT_07_model)
+
+ggplot(ourData, aes(x=EMNT_07, y=`Decimal`)) + 
+  geom_point() +
+  geom_smooth(method="lm") + 
+  labs()
+
+EMXT_02_model <- lm(`Decimal` ~ EMXT_02, ourData)
+summary(EMXT_02_model)
+
+ggplot(ourData, aes(x=EMXT_02, y=`Decimal`)) + 
+  geom_point() +
+  geom_smooth(method="lm") + 
+  labs()
+
+totalRain_10_model <- lm(`Decimal` ~ totalRain_10, ourData)
+summary(totalRain_10_model)
+
+ggplot(ourData, aes(x=totalRain_10, y=`Decimal`)) + 
+  geom_point() +
+  geom_smooth(method="lm") + 
+  labs()
+```
+
+## Stepwise:
+
+```{r}
+model <- NULL
+
+# Step 1
+preds <- "1"
+cands <- c("TMAX_01", "TMAX_02", "TMAX_03", "TMAX_04", "TMAX_05", "TMAX_06", "TMAX_07", "TMAX_08", "TMAX_09", "TMAX_10", "TMAX_11", "TMAX_12", "TAVG_01", "TAVG_02", "TAVG_03", "TAVG_04", "TAVG_05", "TAVG_06", "TAVG_07", "TAVG_08", "TAVG_09", "TAVG_10", "TAVG_11", "TAVG_12", "TMIN_01", "TMIN_02", "TMIN_03", "TMIN_04", "TMIN_05", "TMIN_06", "TMIN_07", "TMIN_08", "TMIN_09", "TMIN_10", "TMIN_11", "TMIN_12", "EMNT_01", "EMNT_02", "EMNT_03", "EMNT_04", "EMNT_05", "EMNT_06", "EMNT_07", "EMNT_08", "EMNT_09", "EMNT_10", "EMNT_11", "EMNT_12", "EMXT_01", "EMXT_02", "EMXT_03", "EMXT_04", "EMXT_05", "EMXT_06", "EMXT_07", "EMXT_08", "EMXT_09", "EMXT_10", "EMXT_11", "EMXT_12", "avgSdepth_01", "avgSdepth_02", "avgSdepth_03", "avgSdepth_04", "avgSdepth_05", "avgSdepth_06", "avgSdepth_07", "avgSdepth_08", "avgSdepth_09", "avgSdepth_10", "avgSdepth_11", "avgSdepth_12", "totalRain_01", "totalRain_02", "totalRain_03", "totalRain_04", "totalRain_05", "totalRain_06", "totalRain_07", "totalRain_08", "totalRain_09", "totalRain_10", "totalRain_11", "totalRain_12", "totalSnow_01", "totalSnow_02", "totalSnow_03", "totalSnow_04", "totalSnow_05", "totalSnow_06", "totalSnow_07", "totalSnow_08", "totalSnow_09", "totalSnow_10", "totalSnow_11", "totalSnow_12")
+
+s1 <- step1("Decimal", preds, cands, ourData_part)
+
+model <- c(model, attr(s1, "best"))
+s1
+
+# Step 2
+preds <- "TMAX_04"
+cands <- c("TMAX_01", "TMAX_02", "TMAX_03", "TMAX_05", "TMAX_06", "TMAX_07", "TMAX_08", "TMAX_09", "TMAX_10", "TMAX_11", "TMAX_12", "TAVG_01", "TAVG_02", "TAVG_03", "TAVG_04", "TAVG_05", "TAVG_06", "TAVG_07", "TAVG_08", "TAVG_09", "TAVG_10", "TAVG_11", "TAVG_12", "TMIN_01", "TMIN_02", "TMIN_03", "TMIN_04", "TMIN_05", "TMIN_06", "TMIN_07", "TMIN_08", "TMIN_09", "TMIN_10", "TMIN_11", "TMIN_12", "EMNT_01", "EMNT_02", "EMNT_03", "EMNT_04", "EMNT_05", "EMNT_06", "EMNT_07", "EMNT_08", "EMNT_09", "EMNT_10", "EMNT_11", "EMNT_12", "EMXT_01", "EMXT_02", "EMXT_03", "EMXT_04", "EMXT_05", "EMXT_06", "EMXT_07", "EMXT_08", "EMXT_09", "EMXT_10", "EMXT_11", "EMXT_12", "avgSdepth_01", "avgSdepth_02", "avgSdepth_03", "avgSdepth_04", "avgSdepth_05", "avgSdepth_06", "avgSdepth_07", "avgSdepth_08", "avgSdepth_09", "avgSdepth_10", "avgSdepth_11", "avgSdepth_12", "totalRain_01", "totalRain_02", "totalRain_03", "totalRain_04", "totalRain_05", "totalRain_06", "totalRain_07", "totalRain_08", "totalRain_09", "totalRain_10", "totalRain_11", "totalRain_12", "totalSnow_01", "totalSnow_02", "totalSnow_03", "totalSnow_04", "totalSnow_05", "totalSnow_06", "totalSnow_07", "totalSnow_08", "totalSnow_09", "totalSnow_10", "totalSnow_11", "totalSnow_12")
+
+s1 <- step1("Decimal", preds, cands, ourData_part)
+
+model <- c(model, attr(s1, "best"))
+s1
+
+# Step 3
+preds <- c("TMAX_04", "TAVG_10")
+cands <- c("TMAX_01", "TMAX_02", "TMAX_03", "TMAX_05", "TMAX_06", "TMAX_07", "TMAX_08", "TMAX_09", "TMAX_10", "TMAX_11", "TMAX_12", "TAVG_01", "TAVG_02", "TAVG_03", "TAVG_04", "TAVG_05", "TAVG_06", "TAVG_07", "TAVG_08", "TAVG_09", "TAVG_11", "TAVG_12", "TMIN_01", "TMIN_02", "TMIN_03", "TMIN_04", "TMIN_05", "TMIN_06", "TMIN_07", "TMIN_08", "TMIN_09", "TMIN_10", "TMIN_11", "TMIN_12", "EMNT_01", "EMNT_02", "EMNT_03", "EMNT_04", "EMNT_05", "EMNT_06", "EMNT_07", "EMNT_08", "EMNT_09", "EMNT_10", "EMNT_11", "EMNT_12", "EMXT_01", "EMXT_02", "EMXT_03", "EMXT_04", "EMXT_05", "EMXT_06", "EMXT_07", "EMXT_08", "EMXT_09", "EMXT_10", "EMXT_11", "avgSdepth_01", "avgSdepth_02", "avgSdepth_03", "avgSdepth_04", "avgSdepth_05", "avgSdepth_06", "avgSdepth_07", "avgSdepth_08", "avgSdepth_09", "avgSdepth_10", "avgSdepth_11", "avgSdepth_12", "totalRain_01", "totalRain_02", "totalRain_03", "totalRain_04", "totalRain_05", "totalRain_06", "totalRain_07", "totalRain_08", "totalRain_09", "totalRain_10", "totalRain_11", "totalRain_12", "totalSnow_01", "totalSnow_02", "totalSnow_03", "totalSnow_04", "totalSnow_05", "totalSnow_06", "totalSnow_07", "totalSnow_08", "totalSnow_09", "totalSnow_10", "totalSnow_11", "totalSnow_12")
+
+s1 <- step1("Decimal", preds, cands, ourData_part)
+
+model <- c(model, attr(s1, "best"))
+s1
+
+# Step 4
+preds <- c("TMAX_04", "TAVG_10", "EMNT_07")
+cands <- c("TMAX_01", "TMAX_02", "TMAX_03", "TMAX_05", "TMAX_06", "TMAX_07", "TMAX_08", "TMAX_09", "TMAX_10", "TMAX_11", "TMAX_12", "TAVG_01", "TAVG_02", "TAVG_03", "TAVG_04", "TAVG_05", "TAVG_06", "TAVG_07", "TAVG_08", "TAVG_09", "TAVG_11", "TAVG_12", "TMIN_01", "TMIN_02", "TMIN_03", "TMIN_04", "TMIN_05", "TMIN_06", "TMIN_07", "TMIN_08", "TMIN_09", "TMIN_10", "TMIN_11", "TMIN_12", "EMNT_01", "EMNT_02", "EMNT_03", "EMNT_04", "EMNT_05", "EMNT_06", "EMNT_08", "EMNT_09", "EMNT_10", "EMNT_11", "EMNT_12", "EMXT_01", "EMXT_02", "EMXT_03", "EMXT_04", "EMXT_05", "EMXT_06", "EMXT_07", "EMXT_08", "EMXT_09", "EMXT_10", "EMXT_11", "avgSdepth_01", "avgSdepth_02", "avgSdepth_03", "avgSdepth_04", "avgSdepth_05", "avgSdepth_06", "avgSdepth_07", "avgSdepth_08", "avgSdepth_09", "avgSdepth_10", "avgSdepth_11", "avgSdepth_12", "totalRain_01", "totalRain_02", "totalRain_03", "totalRain_04", "totalRain_05", "totalRain_06", "totalRain_07", "totalRain_08", "totalRain_09", "totalRain_10", "totalRain_11", "totalRain_12", "totalSnow_01", "totalSnow_02", "totalSnow_03", "totalSnow_04", "totalSnow_05", "totalSnow_06", "totalSnow_07", "totalSnow_08", "totalSnow_09", "totalSnow_10", "totalSnow_11", "totalSnow_12")
+
+s1 <- step1("Decimal", preds, cands, ourData_part)
+
+model <- c(model, attr(s1, "best"))
+s1
+
+# Step 5
+preds <- c("TMAX_04", "TAVG_10", "EMNT_07", "EMXT_02")
+cands <- c("TMAX_01", "TMAX_02", "TMAX_03", "TMAX_05", "TMAX_06", "TMAX_07", "TMAX_08", "TMAX_09", "TMAX_10", "TMAX_11", "TMAX_12", "TAVG_01", "TAVG_02", "TAVG_03", "TAVG_04", "TAVG_05", "TAVG_06", "TAVG_07", "TAVG_08", "TAVG_09", "TAVG_11", "TAVG_12", "TMIN_01", "TMIN_02", "TMIN_03", "TMIN_04", "TMIN_05", "TMIN_06", "TMIN_07", "TMIN_08", "TMIN_09", "TMIN_10", "TMIN_11", "TMIN_12", "EMNT_01", "EMNT_02", "EMNT_03", "EMNT_04", "EMNT_05", "EMNT_06", "EMNT_08", "EMNT_09", "EMNT_10", "EMNT_11", "EMNT_12", "EMXT_01", "EMXT_03", "EMXT_04", "EMXT_05", "EMXT_06", "EMXT_07", "EMXT_08", "EMXT_09", "EMXT_10", "EMXT_11", "avgSdepth_01", "avgSdepth_02", "avgSdepth_03", "avgSdepth_04", "avgSdepth_05", "avgSdepth_06", "avgSdepth_07", "avgSdepth_08", "avgSdepth_09", "avgSdepth_10", "avgSdepth_11", "avgSdepth_12", "totalRain_01", "totalRain_02", "totalRain_03", "totalRain_04", "totalRain_05", "totalRain_06", "totalRain_07", "totalRain_08", "totalRain_09", "totalRain_10", "totalRain_11", "totalRain_12", "totalSnow_01", "totalSnow_02", "totalSnow_03", "totalSnow_04", "totalSnow_05", "totalSnow_06", "totalSnow_07", "totalSnow_08", "totalSnow_09", "totalSnow_10", "totalSnow_11", "totalSnow_12")
+
+s1 <- step1("Decimal", preds, cands, ourData_part)
+
+model <- c(model, attr(s1, "best"))
+s1
+
+# Step 6
+preds <- c("TMAX_04", "TAVG_10", "EMNT_07", "EMXT_02", "totalRain_10")
+cands <- c("TMAX_01", "TMAX_02", "TMAX_03", "TMAX_05", "TMAX_06", "TMAX_07", "TMAX_08", "TMAX_09", "TMAX_10", "TMAX_11", "TMAX_12", "TAVG_01", "TAVG_02", "TAVG_03", "TAVG_04", "TAVG_05", "TAVG_06", "TAVG_07", "TAVG_08", "TAVG_09", "TAVG_11", "TAVG_12", "TMIN_01", "TMIN_02", "TMIN_03", "TMIN_04", "TMIN_05", "TMIN_06", "TMIN_07", "TMIN_08", "TMIN_09", "TMIN_10", "TMIN_11", "TMIN_12", "EMNT_01", "EMNT_02", "EMNT_03", "EMNT_04", "EMNT_05", "EMNT_06", "EMNT_08", "EMNT_09", "EMNT_10", "EMNT_11", "EMNT_12", "EMXT_01", "EMXT_03", "EMXT_04", "EMXT_05", "EMXT_06", "EMXT_07", "EMXT_08", "EMXT_09", "EMXT_10", "EMXT_11", "avgSdepth_01", "avgSdepth_02", "avgSdepth_03", "avgSdepth_04", "avgSdepth_05", "avgSdepth_06", "avgSdepth_07", "avgSdepth_08", "avgSdepth_09", "avgSdepth_10", "avgSdepth_11", "avgSdepth_12", "totalRain_01", "totalRain_02", "totalRain_03", "totalRain_04", "totalRain_05", "totalRain_06", "totalRain_07", "totalRain_08", "totalRain_09", "totalRain_11", "totalRain_12", "totalSnow_01", "totalSnow_02", "totalSnow_03", "totalSnow_04", "totalSnow_05", "totalSnow_06", "totalSnow_07", "totalSnow_08", "totalSnow_09", "totalSnow_10", "totalSnow_11", "totalSnow_12")
+
+s1 <- step1("Decimal", preds, cands, ourData_part)
+
+model <- c(model, attr(s1, "best"))
+s1
+
+# Step 7
+preds <- c("TMAX_04", "TAVG_10", "EMNT_07", "EMXT_02", "totalRain_10", "totalRain_12")
+cands <- c("TMAX_01", "TMAX_02", "TMAX_03", "TMAX_05", "TMAX_06", "TMAX_07", "TMAX_08", "TMAX_09", "TMAX_10", "TMAX_11", "TMAX_12", "TAVG_01", "TAVG_02", "TAVG_03", "TAVG_04", "TAVG_05", "TAVG_06", "TAVG_07", "TAVG_08", "TAVG_09", "TAVG_11", "TAVG_12", "TMIN_01", "TMIN_02", "TMIN_03", "TMIN_04", "TMIN_05", "TMIN_06", "TMIN_07", "TMIN_08", "TMIN_09", "TMIN_10", "TMIN_11", "TMIN_12", "EMNT_01", "EMNT_02", "EMNT_03", "EMNT_04", "EMNT_05", "EMNT_06", "EMNT_08", "EMNT_09", "EMNT_10", "EMNT_11", "EMNT_12", "EMXT_01", "EMXT_03", "EMXT_04", "EMXT_05", "EMXT_06", "EMXT_07", "EMXT_08", "EMXT_09", "EMXT_10", "EMXT_11", "avgSdepth_01", "avgSdepth_02", "avgSdepth_03", "avgSdepth_04", "avgSdepth_05", "avgSdepth_06", "avgSdepth_07", "avgSdepth_08", "avgSdepth_09", "avgSdepth_10", "avgSdepth_11", "avgSdepth_12", "totalRain_01", "totalRain_02", "totalRain_03", "totalRain_04", "totalRain_05", "totalRain_06", "totalRain_07", "totalRain_08", "totalRain_09", "totalRain_11", "totalSnow_01", "totalSnow_02", "totalSnow_03", "totalSnow_04", "totalSnow_05", "totalSnow_06", "totalSnow_07", "totalSnow_08", "totalSnow_09", "totalSnow_10", "totalSnow_11", "totalSnow_12")
+
+s1 <- step1("Decimal", preds, cands, ourData_part)
+
+model <- c(model, attr(s1, "best"))
+s1
+
+# Step 8
+preds <- c("TMAX_04", "TAVG_10", "EMNT_07", "EMXT_02", "totalRain_10", "totalRain_12", "TMAX_08")
+cands <- c("TMAX_01", "TMAX_02", "TMAX_03", "TMAX_05", "TMAX_06", "TMAX_07", "TMAX_09", "TMAX_10", "TMAX_11", "TMAX_12", "TAVG_01", "TAVG_02", "TAVG_03", "TAVG_04", "TAVG_05", "TAVG_06", "TAVG_07", "TAVG_08", "TAVG_09", "TAVG_11", "TAVG_12", "TMIN_01", "TMIN_02", "TMIN_03", "TMIN_04", "TMIN_05", "TMIN_06", "TMIN_07", "TMIN_08", "TMIN_09", "TMIN_10", "TMIN_11", "TMIN_12", "EMNT_01", "EMNT_02", "EMNT_03", "EMNT_04", "EMNT_05", "EMNT_06", "EMNT_08", "EMNT_09", "EMNT_10", "EMNT_11", "EMNT_12", "EMXT_01", "EMXT_03", "EMXT_04", "EMXT_05", "EMXT_06", "EMXT_07", "EMXT_08", "EMXT_09", "EMXT_10", "EMXT_11", "avgSdepth_01", "avgSdepth_02", "avgSdepth_03", "avgSdepth_04", "avgSdepth_05", "avgSdepth_06", "avgSdepth_07", "avgSdepth_08", "avgSdepth_09", "avgSdepth_10", "avgSdepth_11", "avgSdepth_12", "totalRain_01", "totalRain_02", "totalRain_03", "totalRain_04", "totalRain_05", "totalRain_06", "totalRain_07", "totalRain_08", "totalRain_09", "totalRain_11", "totalSnow_01", "totalSnow_02", "totalSnow_03", "totalSnow_04", "totalSnow_05", "totalSnow_06", "totalSnow_07", "totalSnow_08", "totalSnow_09", "totalSnow_10", "totalSnow_11", "totalSnow_12")
+
+s1 <- step1("Decimal", preds, cands, ourData_part)
+
+model <- c(model, attr(s1, "best"))
+s1
+
+step_model <- tibble(index=seq_along(model),
+                     variable=factor(names(model), levels=names(model)),
+                     RMSE=model)
+
+ggplot(step_model, aes(y=RMSE)) +
+  geom_point(aes(x=variable)) +
+  geom_line(aes(x=index)) +
+  labs(title="Stepwise model selection") +
+  theme_minimal() +
+  coord_flip()
+
+best_fit <- lm(Decimal 
+               ~ TMAX_04 +TAVG_10 + EMNT_07 + EMXT_02 + totalRain_10 + TMAX_08, data = ourData_part$test)
+rmse(best_fit, ourData_part$test)
+
+summary(best_fit)
+plot(best_fit)
+
+K-fold:
+set.seed(2)
+model_cv <- crossv_kfold(ourData, 5)
+
+cv_t1 <- model_cv %>% 
+  mutate(fit = purrr::map(train, 
+                          ~ lm(Decimal 
+               ~ TMAX_04 +TAVG_10 + EMNT_07 + EMXT_02 + totalRain_10 + TMAX_08, 
+                               data = .)),
+         rmse = purrr::map2_dbl(fit, test, ~ rmse(.x, .y)))
+
+mean(cv_t1$rmse)
+summary(cv_t1)
+```
+
+## PCA
+
+```{r}
+d <- subset(dataWithWind, select = -c(Time))
+
+d <- d[ , colSums(is.na(d)) == 0]
+
+pc1 <- prcomp(na.omit(d[ , which(apply(na.omit(d), 2, var) != 0)]), scale.=TRUE)
+
+summary(pc1)
+
+plot(pc1)
+
+as_tibble(pc1$x) %>%
+  ggplot(aes(x=PC1, y=PC2)) +
+  geom_point() +
+  scale_color_brewer(palette="Dark2") +
+  labs(color="Landscape") +
+  theme_minimal()
+```
+
+## KMEANS
+
+```{r}
+set.seed(1)
+
+library(Rtsne)
+
+simplified <- na.omit(d[ , which(apply(na.omit(d), 2, var) != 0)])
+
+copy <- simplified
+
+km <- kmeans(copy, centers=4)
+
+km_cl <- factor(km$cluster)
+
+set.seed(3)
+tsne2 <- Rtsne(copy, perplexity=7)
+
+colnames(tsne2$Y) <- c("C1", "C2")
+
+tc2 <- as_tibble(tsne2$Y)
+
+simplified$cluster <- km$cluster
+simplified$C1 <- tc2$C1
+simplified$C2 <- tc2$C2
+
+simplified$Month <- as.factor(simplified$Month)
+
+ggplot(simplified, aes(x=C1, y=C2, color=km_cl, shape=Month, size=8)) +
+  geom_point() +
+  scale_color_brewer(palette="Set1") +
+  labs(shape="Month", color="Cluster") +
+  theme_minimal()
+
+ks <- 2:10
+
+tot_within_ss <- sapply(ks, function(k) {
+    cl <- kmeans(na.omit(d[ , which(apply(na.omit(d), 2, var) != 0)]), k, nstart = 10)
+    cl$tot.withinss
+})
+plot(ks, tot_within_ss, type = "b",
+     main = "Selection of # of clusters for satellite data",
+     ylab = "Total within squared distances",
+     xlab = "Values of k tested")
+abline(v=4, col="green", lty=2)
+
+```
